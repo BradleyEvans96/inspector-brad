@@ -39,7 +39,10 @@ BOT_VERSION="v1"                  # tag to pin to
 WORKFLOW_PATH=".github/workflows/claude-review.yml"
 TMP_FILE=$(mktemp)
 
-cat > "$TMP_FILE" <<WFEOF
+# Quoted heredoc so bash does NOT process backslashes or expand variables.
+# This keeps the output Prettier-clean (no collapsed line continuations) and
+# lets us drop in BOT_OWNER/BOT_REPO/BOT_VERSION via sed instead.
+cat > "$TMP_FILE" <<'WFEOF'
 name: Claude PR Review
 
 on:
@@ -53,8 +56,8 @@ permissions:
   pull-requests: write
   issues: write
   id-token: write
-  statuses: write       # so Brad can post a "Inspector Brad" commit status (the PR check row)
-  checks: write         # tolerated by both Statuses API and any future Checks API use
+  statuses: write
+  checks: write
 
 jobs:
   review:
@@ -66,46 +69,52 @@ jobs:
       )
     runs-on: ubuntu-latest
     steps:
-      # React with 👀 on the trigger comment so you can see it's working.
       - name: Acknowledge with reaction
         env:
-          GH_TOKEN:    \${{ secrets.GITHUB_TOKEN }}
-          COMMENT_ID:  \${{ github.event.comment.id }}
-          REPO:        \${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          REPO: ${{ github.repository }}
         run: |
           gh api -X POST \
-            "repos/\${REPO}/issues/comments/\${COMMENT_ID}/reactions" \
+            "repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
             -H "Accept: application/vnd.github+json" \
             -f content="eyes"
 
       - uses: actions/checkout@v4
         with:
-          ref: refs/pull/\${{ github.event.issue.number || github.event.pull_request.number }}/head
+          ref: refs/pull/${{ github.event.issue.number || github.event.pull_request.number }}/head
           fetch-depth: 0
 
       - id: review
-        uses: ${BOT_OWNER}/${BOT_REPO}@${BOT_VERSION}
+        uses: __BOT_OWNER__/__BOT_REPO__@__BOT_VERSION__
         with:
-          oauth-token:  \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github-token: \${{ secrets.GITHUB_TOKEN }}
+          oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           # Optional overrides:
           # model: claude-opus-4-7
           # effort: high
           # extra-instructions: |
           #   This repo is a Django app. Be strict about N+1 queries.
 
-      # If anything above failed, post a visible comment so you don't have
-      # to dig into the Actions tab to spot the failure.
       - name: Report failure on PR
         if: failure()
         env:
-          GH_TOKEN:   \${{ secrets.GITHUB_TOKEN }}
-          REPO:       \${{ github.repository }}
-          PR_NUMBER:  \${{ github.event.issue.number || github.event.pull_request.number }}
-          RUN_URL:    \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh pr comment "\${PR_NUMBER}" --repo "\${REPO}" --body "🚨 **Inspector Brad failed to review this PR.** [View logs](\${RUN_URL})"
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" \
+            --body "🚨 **Inspector Brad failed to review this PR.** [View logs](${RUN_URL})"
 WFEOF
+
+# Now substitute the bot coordinates.
+sed -i.bak \
+  -e "s|__BOT_OWNER__|${BOT_OWNER}|g" \
+  -e "s|__BOT_REPO__|${BOT_REPO}|g" \
+  -e "s|__BOT_VERSION__|${BOT_VERSION}|g" \
+  "$TMP_FILE"
+rm -f "${TMP_FILE}.bak"
 
 for repo in "$@"; do
   echo "→ Installing in $repo..."
