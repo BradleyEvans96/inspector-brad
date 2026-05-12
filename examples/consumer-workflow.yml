@@ -1,8 +1,7 @@
 # Drop this at .github/workflows/claude-review.yml in any repo you want
-# the bot to work on. Replace YOUR_GH_USERNAME with your actual handle.
+# Inspector Brad to work on. Replace YOUR_GH_USERNAME with your handle.
 #
 # Trigger phrase: comment "@inspector-brad" or "/inspector-brad" on any PR.
-# Reviews ONLY run when you mention it — no auto-runs on every push.
 
 name: Claude PR Review
 
@@ -15,12 +14,11 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  issues: write          # required for issue_comment events
-  id-token: write        # required by claude-code-action@v1
+  issues: write
+  id-token: write
 
 jobs:
   review:
-    # Only run when the comment is on a PR AND mentions the bot.
     if: >-
       (github.event.issue.pull_request != null || github.event.pull_request != null) &&
       (
@@ -29,13 +27,25 @@ jobs:
       )
     runs-on: ubuntu-latest
     steps:
-      # Check out the PR's head ref so Claude can read the actual code.
+      # React with 👀 on the trigger comment so you can see it's working.
+      - name: Acknowledge with reaction
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID:  ${{ github.event.comment.id }}
+          REPO:        ${{ github.repository }}
+        run: |
+          gh api -X POST \
+            "repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+            -H "Accept: application/vnd.github+json" \
+            -f content="eyes"
+
       - uses: actions/checkout@v4
         with:
           ref: refs/pull/${{ github.event.issue.number || github.event.pull_request.number }}/head
           fetch-depth: 0
 
-      - uses: YOUR_GH_USERNAME/inspector-brad@v1
+      - id: review
+        uses: YOUR_GH_USERNAME/inspector-brad@v1
         with:
           oauth-token:  ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -44,3 +54,15 @@ jobs:
           # effort: high
           # extra-instructions: |
           #   This repo is a Django app. Be strict about N+1 queries.
+
+      # If anything above failed, post a visible comment so you don't have
+      # to dig into the Actions tab to spot the failure.
+      - name: Report failure on PR
+        if: failure()
+        env:
+          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+          REPO:       ${{ github.repository }}
+          PR_NUMBER:  ${{ github.event.issue.number || github.event.pull_request.number }}
+          RUN_URL:    ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "🚨 **Inspector Brad failed to review this PR.** [View logs](${RUN_URL})"
