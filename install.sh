@@ -31,7 +31,7 @@ USAGE
 fi
 
 # ---- EDIT THIS ----
-BOT_OWNER="YOUR_GH_USERNAME"      # e.g. "brad"
+BOT_OWNER="BradleyEvans96"      # e.g. "brad"
 BOT_REPO="inspector-brad"           # the action repo name
 BOT_VERSION="v1"                  # tag to pin to
 # -------------------
@@ -53,6 +53,8 @@ permissions:
   pull-requests: write
   issues: write
   id-token: write
+  statuses: write       # so Brad can post a "Inspector Brad" commit status (the PR check row)
+  checks: write         # tolerated by both Statuses API and any future Checks API use
 
 jobs:
   review:
@@ -130,6 +132,21 @@ cat <<DONE
 
 All done. Make sure each repo has CLAUDE_CODE_OAUTH_TOKEN as a secret —
 if you set it at the org level, every repo inherits it for free.
+
+⚠️  GitHub Free plan: org-level Actions secrets are only readable from
+   PUBLIC repos. For private repos under a Free org, set the secret at
+   the repo level instead:
+     gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo OWNER/REPO
+
+Per-repo tuning: drop a .inspector-brad.md file at the repo root with
+guidance Brad should apply to every review of that repo. e.g.:
+
+  # .inspector-brad.md
+  This is a Django app. Be strict about N+1 queries and missing
+  select_related on querysets in views.
+
+  Tests use Pytest. The 'noqa: B008' pattern in tests is intentional
+  (DI fixtures) — don't flag it.
 
 To trigger a review, comment "@inspector-brad" or "/inspector-brad" on any PR.
 DONE

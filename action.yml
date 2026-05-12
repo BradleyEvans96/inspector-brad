@@ -45,11 +45,15 @@ runs:
         PR_FROM_PR:          ${{ github.event.pull_request.number }}
         PR_FROM_ISSUE:       ${{ github.event.issue.number }}
         EFFORT:              ${{ inputs.effort }}
+        MODEL:               ${{ inputs.model }}
         EXTRA_INSTRUCTIONS:  ${{ inputs.extra-instructions }}
         # Read directly from the event so consumer workflows don't need to pass it.
         # Empty for events without a comment (e.g. workflow_dispatch); the prompt
         # tells Brad to skip the reaction swap when this is unset.
         TRIGGER_COMMENT_ID:  ${{ github.event.comment.id }}
+        # `.inspector-brad.md` at the repo root, if present, is loaded as
+        # repo-specific guidance — mirrors Cursor's `.cursor/BUGBOT.md`.
+        REPO_CONFIG_PATH:    ${{ github.workspace }}/.inspector-brad.md
       run: |
         PR_NUMBER="${PR_FROM_PR:-${PR_FROM_ISSUE}}"
         if [ -z "${PR_NUMBER}" ]; then
@@ -58,6 +62,13 @@ runs:
         fi
         echo "Reviewing PR #${PR_NUMBER} in ${REPO}"
         BASE_PROMPT=$(cat "${ACTION_PATH}/prompts/inspector_brad_system.md")
+        REPO_CONFIG=""
+        if [ -f "${REPO_CONFIG_PATH}" ]; then
+          REPO_CONFIG=$(cat "${REPO_CONFIG_PATH}")
+          echo "Loaded .inspector-brad.md ($(wc -c < "${REPO_CONFIG_PATH}") bytes)"
+        else
+          echo ".inspector-brad.md not found at repo root — skipping repo-specific guidance"
+        fi
         {
           echo "FULL_PROMPT<<BUGBOT_PROMPT_EOF"
           echo "${BASE_PROMPT}"
@@ -65,13 +76,19 @@ runs:
           echo "# Context for this review"
           echo "- Repo: ${REPO}"
           echo "- PR number: ${PR_NUMBER}"
+          echo "- Model: ${MODEL}"
           echo "- Review effort: ${EFFORT}"
           if [ -n "${TRIGGER_COMMENT_ID}" ]; then
             echo "- Trigger comment ID: ${TRIGGER_COMMENT_ID}"
           fi
+          if [ -n "${REPO_CONFIG}" ]; then
+            echo ""
+            echo "# Repo-specific guidance (from .inspector-brad.md at the repo root)"
+            echo "${REPO_CONFIG}"
+          fi
           if [ -n "${EXTRA_INSTRUCTIONS}" ]; then
             echo ""
-            echo "# Repo-specific instructions"
+            echo "# Repo-specific instructions (from workflow input)"
             echo "${EXTRA_INSTRUCTIONS}"
           fi
           echo "BUGBOT_PROMPT_EOF"
