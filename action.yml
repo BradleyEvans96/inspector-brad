@@ -1,0 +1,98 @@
+name: "Inspector Brad"
+description: "AI PR review using your Claude Max subscription. Triggered by @inspector-brad mentions on PRs."
+author: "Brad"
+branding:
+  icon: "search"
+  color: "purple"
+
+inputs:
+  oauth-token:
+    description: "Claude OAuth token from `claude setup-token` (uses Max subscription).
+    Set this OR anthropic-api-key."
+    required: false
+    default: ""
+  anthropic-api-key:
+    description: "Anthropic API key (bills to API account). Set this OR oauth-token."
+    required: false
+    default: ""
+  github-token:
+    description: "GitHub token with pull-requests:write. Usually secrets.GITHUB_TOKEN."
+    required: true
+  model:
+    description: "Claude model. e.g. claude-sonnet-4-6 (default) or claude-opus-4-7."
+    required: false
+    default: "claude-sonnet-4-6"
+  effort:
+    description: "Review effort hint: low | medium | high."
+    required: false
+    default: "medium"
+  extra-instructions:
+    description: "Optional repo-specific prompt addendum."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build review prompt
+      shell: bash
+      env:
+        ACTION_PATH:         ${{ github.action_path }}
+        REPO:                ${{ github.repository }}
+        # PR number lives in different places depending on the trigger event.
+        PR_FROM_PR:          ${{ github.event.pull_request.number }}
+        PR_FROM_ISSUE:       ${{ github.event.issue.number }}
+        EFFORT:              ${{ inputs.effort }}
+        EXTRA_INSTRUCTIONS:  ${{ inputs.extra-instructions }}
+      run: |
+        PR_NUMBER="${PR_FROM_PR:-${PR_FROM_ISSUE}}"
+        if [ -z "${PR_NUMBER}" ]; then
+          echo "::error::Could not determine PR number from event payload."
+          exit 1
+        fi
+        echo "Reviewing PR #${PR_NUMBER} in ${REPO}"
+        BASE_PROMPT=$(cat "${ACTION_PATH}/prompts/inspector_brad_system.md")
+        {
+          echo "FULL_PROMPT<<BUGBOT_PROMPT_EOF"
+          echo "${BASE_PROMPT}"
+          echo ""
+          echo "# Context for this review"
+          echo "- Repo: ${REPO}"
+          echo "- PR number: ${PR_NUMBER}"
+          echo "- Review effort: ${EFFORT}"
+          if [ -n "${EXTRA_INSTRUCTIONS}" ]; then
+            echo ""
+            echo "# Repo-specific instructions"
+            echo "${EXTRA_INSTRUCTIONS}"
+          fi
+          echo "BUGBOT_PROMPT_EOF"
+        } >> "${GITHUB_ENV}"
+
+    - name: Claude review (OAuth / subscription)
+      if: inputs.oauth-token != ''
+      uses: anthropics/claude-code-action@v1
+      with:
+        claude_code_oauth_token: ${{ inputs.oauth-token }}
+        github_token:            ${{ inputs.github-token }}
+        prompt:                  ${{ env.FULL_PROMPT }}
+        claude_args: |
+          --model ${{ inputs.model }}
+          --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*),Read,Grep,Glob"
+
+    - name: Claude review (API key fallback)
+      if: inputs.oauth-token == '' && inputs.anthropic-api-key != ''
+      uses: anthropics/claude-code-action@v1
+      with:
+        anthropic_api_key: ${{ inputs.anthropic-api-key }}
+        github_token:      ${{ inputs.github-token }}
+        prompt:            ${{ env.FULL_PROMPT }}
+        claude_args: |
+          --model ${{ inputs.model }}
+          --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*),Read,Grep,Glob"
+
+    - name: Fail if no auth provided
+      if: inputs.oauth-token == '' && inputs.anthropic-api-key == ''
+      shell: bash
+      run: |
+        echo "::error::Either oauth-token or anthropic-api-key must be set."
+        exit 1

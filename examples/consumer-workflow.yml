@@ -1,0 +1,46 @@
+# Drop this at .github/workflows/claude-review.yml in any repo you want
+# the bot to work on. Replace YOUR_GH_USERNAME with your actual handle.
+#
+# Trigger phrase: comment "@inspector-brad" or "/inspector-brad" on any PR.
+# Reviews ONLY run when you mention it — no auto-runs on every push.
+
+name: Claude PR Review
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write          # required for issue_comment events
+  id-token: write        # required by claude-code-action@v1
+
+jobs:
+  review:
+    # Only run when the comment is on a PR AND mentions the bot.
+    if: >-
+      (github.event.issue.pull_request != null || github.event.pull_request != null) &&
+      (
+        contains(github.event.comment.body, '@inspector-brad') ||
+        contains(github.event.comment.body, '/inspector-brad')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the PR's head ref so Claude can read the actual code.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number || github.event.pull_request.number }}/head
+          fetch-depth: 0
+
+      - uses: YOUR_GH_USERNAME/inspector-brad@v1
+        with:
+          oauth-token:  ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional overrides:
+          # model: claude-opus-4-7
+          # effort: high
+          # extra-instructions: |
+          #   This repo is a Django app. Be strict about N+1 queries.
