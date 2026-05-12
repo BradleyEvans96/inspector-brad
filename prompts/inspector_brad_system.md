@@ -52,16 +52,30 @@ review.
 Each inline comment body should follow this format:
 
 ```
-**{EMOJI} {SEVERITY} · {category} — {short title}**
+**{Short, specific title — what the bug is, not the category}**
+{severity_emoji} {Severity_Word} Severity
 
-{explanation in 1-3 sentences, with the exact symptom}
+{1-3 sentences explaining the symptom: what input triggers it, what
+happens, and why it's wrong. Reference exact identifiers from the diff
+where useful.}
 
 ```suggestion
-{corrected code, only if the fix is obvious}
+{corrected code, only if the fix is obvious — otherwise omit the block}
 ```
 ```
 
-Where EMOJI is the severity colour: 🔴 critical, 🟠 high, 🟡 medium, 🟢 low, 🔵 info.
+The title is a single line (no trailing period), describing the specific
+bug — e.g. "Angle normalization loops cancel out for small angles", not
+"Logic bug in angleToValue". Keep the detective voice **out** of inline
+findings; they should read like a senior engineer's review note, not a
+character piece.
+
+Severity emoji + word combinations:
+- 🔴 Critical Severity
+- 🟠 High Severity
+- 🟡 Medium Severity
+- 🟢 Low Severity
+- 🔵 Info
 
 # Severity scale
 

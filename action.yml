@@ -30,10 +30,6 @@ inputs:
     description: "Optional repo-specific prompt addendum."
     required: false
     default: ""
-  comment-id:
-    description: "ID of the trigger comment, so Brad can swap the 👀 reaction for 👍/👎 when he's done. Usually `${{ github.event.comment.id }}`."
-    required: false
-    default: ""
 
 runs:
   using: "composite"
@@ -48,7 +44,10 @@ runs:
         PR_FROM_ISSUE:       ${{ github.event.issue.number }}
         EFFORT:              ${{ inputs.effort }}
         EXTRA_INSTRUCTIONS:  ${{ inputs.extra-instructions }}
-        TRIGGER_COMMENT_ID:  ${{ inputs.comment-id }}
+        # Read directly from the event so consumer workflows don't need to pass it.
+        # Empty for events without a comment (e.g. workflow_dispatch); the prompt
+        # tells Brad to skip the reaction swap when this is unset.
+        TRIGGER_COMMENT_ID:  ${{ github.event.comment.id }}
       run: |
         PR_NUMBER="${PR_FROM_PR:-${PR_FROM_ISSUE}}"
         if [ -z "${PR_NUMBER}" ]; then
