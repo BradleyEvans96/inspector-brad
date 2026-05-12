@@ -19,13 +19,15 @@ inputs:
     description: "GitHub token with pull-requests:write. Usually secrets.GITHUB_TOKEN."
     required: true
   model:
-    description: "Claude model. e.g. claude-sonnet-4-6 (default) or claude-opus-4-7."
+    description: "Claude model. Defaults to claude-opus-4-7 for maximum bug-catching;
+    downshift to claude-sonnet-4-6 if quota burn matters more than depth."
     required: false
-    default: "claude-sonnet-4-6"
+    default: "claude-opus-4-7"
   effort:
-    description: "Review effort hint: low | medium | high."
+    description: "Review effort hint: low | medium | high. Default high — Brad reads
+    surrounding files, callers, and tests rather than skimming the diff."
     required: false
-    default: "medium"
+    default: "high"
   extra-instructions:
     description: "Optional repo-specific prompt addendum."
     required: false
